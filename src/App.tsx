@@ -113,7 +113,7 @@ function App() {
     const blob = new Blob([buffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    saveAs(blob, "phone_numbers.xlsx");
+    saveAs(blob, "UploadTemplate.xlsx");
 
     // Clear textarea and entries after export
     setInputText("");
