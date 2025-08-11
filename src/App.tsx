@@ -16,7 +16,7 @@ function App() {
   const validateNumber = (num: string): boolean => /^0\d{9}$/.test(num);
 
   const processInput = (text: string) => {
-    setInputText(text); // Update textarea content
+    setInputText(text);
 
     const lines = text
       .split(/\r?\n/)
@@ -96,18 +96,27 @@ function App() {
       }
     });
 
+    // Auto-adjust column widths
     worksheet.columns.forEach((column) => {
       let maxLength = 10;
-
       if (typeof column.eachCell === "function") {
         column.eachCell({ includeEmpty: true }, (cell) => {
           const cellValue = cell.value ? cell.value.toString() : "";
           maxLength = Math.max(maxLength, cellValue.length);
         });
       }
-
       column.width = maxLength + 2;
     });
+
+    // Totals row placed 5 rows after last entry
+    const lastRowNum = worksheet.lastRow?.number || entries.length + 1;
+    const totalRowNum = lastRowNum + 5;
+
+    worksheet.getCell(`F${totalRowNum}`).value = { formula: `SUM(D2:D${lastRowNum})` };
+    worksheet.getCell(`G${totalRowNum}`).value = { formula: `F${totalRowNum}/1024` };
+
+    worksheet.getCell(`F${totalRowNum}`).font = { bold: true };
+    worksheet.getCell(`G${totalRowNum}`).font = { bold: true };
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
@@ -122,13 +131,15 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-8">
-      <h1 className="text-3xl font-bold mb-6">📱 Phone Number Validator/Extractor</h1>
+      <h1 className="text-3xl font-bold mb-6">
+        📱 Phone Number Validator/Extractor
+      </h1>
 
       <textarea
         placeholder="Paste phone numbers and allocations here, e.g. 0554739033. 20GB"
         className="w-full max-w-lg p-3 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
         rows={5}
-        value={inputText} // Controlled textarea
+        value={inputText}
         onChange={(e) => processInput(e.target.value)}
       />
 
