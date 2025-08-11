@@ -122,7 +122,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-8">
-      <h1 className="text-3xl font-bold mb-6">📱 Phone Number Validator</h1>
+      <h1 className="text-3xl font-bold mb-6">📱 Phone Number Validator/Extractor</h1>
 
       <textarea
         placeholder="Paste phone numbers and allocations here, e.g. 0554739033. 20GB"
