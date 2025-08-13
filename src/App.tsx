@@ -216,7 +216,7 @@ function App() {
       const invalidCount = entries.filter(entry => !entry.isValid).length;
       
       // Success message
-      alert(`✅ Excel file exported successfully!\n\nTotal exported: ${entries.length} entries\nValid: ${validEntries.length}\nDuplicates (highlighted in yellow): ${duplicateCount}\nInvalid (highlighted in red): ${invalidCount}\n\nNote: Voice and SMS columns are empty - add data as needed.`);
+      alert(`✅ Excel file exported successfully!\n\nTotal exported: ${entries.length} entries\nValid: ${validEntries.length}\nDuplicates (highlighted in yellow): ${duplicateCount}\nInvalid (highlighted in red): ${invalidCount}`);
       
       // Clear data after successful export
       setInputText("");
