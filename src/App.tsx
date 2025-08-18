@@ -2,7 +2,6 @@ import React, { useState, useCallback, useRef } from "react";
 import { Upload, FileText, Check, X, Download, Phone, Database, AlertCircle, BarChart } from "lucide-react";
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 import ExcelJS from "exceljs";
-import { saveAs } from "file-saver";
 
 type PhoneEntry = {
   number: string;
@@ -546,6 +545,7 @@ function BundleCategorizerApp({
 
     setSummary(summaryArray);
     setChartData(summaryArray);
+    setRawData(""); // Clear the input text after processing
   };
 
   const totalEntries = summary.reduce((total, row) => total + row.count, 0);
