@@ -1,9 +1,8 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { Upload, FileText, Check, X, Download, Phone, Database, AlertCircle, BarChart } from "lucide-react";
-import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
-
 
 type PhoneEntry = {
   number: string;
@@ -31,6 +30,7 @@ function BundleAllocatorApp({
   const [isDragActive, setIsDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null); // File input reference
 
   const validateNumber = (num: string): boolean => /^0\d{9}$/.test(num);
 
@@ -135,6 +135,23 @@ function BundleAllocatorApp({
     onDrop(files);
   };
 
+  // Handle click on drop zone to trigger file input
+  const handleDropZoneClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // Handle file selection via input
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
+      onDrop(files);
+      // Reset input value to allow selecting same file again
+      e.target.value = '';
+    }
+  };
+
   const exportToExcel = async () => {
     if (entries.length === 0) {
       alert("No data to export");
@@ -144,8 +161,6 @@ function BundleAllocatorApp({
     setIsExporting(true);
 
     try {
-      // Load ExcelJS dynamically
-      //const ExcelJS = await import('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js');
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("PhoneData");
       
@@ -235,38 +250,39 @@ function BundleAllocatorApp({
       setIsExporting(false);
     }
   };
+  
   const validEntries = entries.filter(entry => entry.isValid && !entry.isDuplicate);
   const invalidEntries = entries.filter(entry => !entry.isValid);
   const duplicateEntries = entries.filter(entry => entry.isDuplicate);
   const totalGB = entries.reduce((sum, entry) => sum + entry.allocationGB, 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Input Section */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200/50 overflow-hidden mb-8">
-          <div className="p-6 border-b border-gray-100">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
-              Input Data
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden mb-8 transition-all hover:shadow-2xl">
+          <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
+              <FileText className="w-6 h-6 text-blue-600" />
+              <span>Input Data</span>
             </h2>
             <p className="text-sm text-gray-600 mt-1">
               Paste phone numbers with allocations or drag & drop a file
             </p>
           </div>
           
-          <div className="p-6 space-y-4">
+          <div className="p-6 space-y-6">
             <div className="relative">
               <textarea
                 placeholder="Paste phone numbers and data allocations here&#10;0554739033 20GB&#10;0201234567 15GB&#10;0556789012 10GB"
-                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none font-mono text-sm"
+                className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none font-mono text-sm shadow-sm hover:shadow-md"
                 rows={6}
                 value={inputText}
                 onChange={(e) => processInput(e.target.value)}
               />
               {isProcessing && (
-                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center rounded-xl">
-                  <div className="flex items-center gap-2 text-blue-600">
+                <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center rounded-xl">
+                  <div className="flex items-center gap-2 text-blue-600 font-medium">
                     <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                     Processing...
                   </div>
@@ -276,87 +292,102 @@ function BundleAllocatorApp({
 
             {/* File Drop Zone */}
             <div
+              onClick={handleDropZoneClick} // Add click handler
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
+              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 ${
                 isDragActive 
-                  ? "border-blue-500 bg-blue-50 scale-105" 
-                  : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+                  ? "border-blue-500 bg-blue-50 scale-[1.02] shadow-lg" 
+                  : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"
               }`}
             >
-              <Upload className={`w-12 h-12 mx-auto mb-4 ${isDragActive ? 'text-blue-500' : 'text-gray-400'}`} />
+              <div className={`w-14 h-14 mx-auto mb-4 flex items-center justify-center rounded-full ${
+                isDragActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'
+              }`}>
+                <Upload className="w-6 h-6" />
+              </div>
               {isDragActive ? (
-                <p className="text-blue-600 font-medium text-lg">Drop your file here!</p>
+                <p className="text-blue-600 font-bold text-lg">Drop your file here!</p>
               ) : (
                 <>
-                  <p className="text-gray-600 font-medium mb-2">Drag & drop CSV or TXT files</p>
+                  <p className="text-gray-700 font-medium mb-2">Drag & drop CSV or TXT files</p>
                   <p className="text-sm text-gray-500">or click to browse files</p>
                 </>
               )}
             </div>
+            
+            {/* Hidden file input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileInputChange}
+              accept=".txt,.csv"
+              className="hidden"
+              multiple
+            />
           </div>
         </div>
 
         {/* Stats Cards */}
         {entries.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            <div className="bg-white rounded-xl p-3 shadow-lg border border-gray-200/50">
-              <div className="flex items-center gap-2">
+            <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200 hover:shadow-lg transition-all">
+              <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0">
-                  <Database className="w-4 h-4 text-blue-600" />
+                  <Database className="w-5 h-5 text-blue-600" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-gray-600">Total Entries</p>
+                  <p className="text-xs text-gray-600 font-medium">Total Entries</p>
                   <p className="text-xl font-bold text-gray-900">{entries.length}</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl p-3 shadow-lg border border-gray-200/50">
-              <div className="flex items-center gap-2">
+            <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200 hover:shadow-lg transition-all">
+              <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 rounded-lg flex-shrink-0">
-                  <Check className="w-4 h-4 text-green-600" />
+                  <Check className="w-5 h-5 text-green-600" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-gray-600">Valid Numbers</p>
+                  <p className="text-xs text-gray-600 font-medium">Valid Numbers</p>
                   <p className="text-xl font-bold text-green-600">{validEntries.length}</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl p-3 shadow-lg border border-gray-200/50">
-              <div className="flex items-center gap-2">
+            <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200 hover:shadow-lg transition-all">
+              <div className="flex items-center gap-3">
                 <div className="p-2 bg-red-100 rounded-lg flex-shrink-0">
-                  <X className="w-4 h-4 text-red-600" />
+                  <X className="w-5 h-5 text-red-600" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-gray-600">Invalid Numbers</p>
+                  <p className="text-xs text-gray-600 font-medium">Invalid Numbers</p>
                   <p className="text-xl font-bold text-red-600">{invalidEntries.length}</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl p-3 shadow-lg border border-gray-200/50">
-              <div className="flex items-center gap-2">
+            <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200 hover:shadow-lg transition-all">
+              <div className="flex items-center gap-3">
                 <div className="p-2 bg-yellow-100 rounded-lg flex-shrink-0">
-                  <AlertCircle className="w-4 h-4 text-yellow-600" />
+                  <AlertCircle className="w-5 h-5 text-yellow-600" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-gray-600">Duplicates</p>
+                  <p className="text-xs text-gray-600 font-medium">Number of Duplicates</p>
                   <p className="text-xl font-bold text-yellow-600">{duplicateEntries.length}</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl p-3 shadow-lg border border-gray-200/50">
-              <div className="flex items-center gap-2">
+            <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200 hover:shadow-lg transition-all">
+              <div className="flex items-center gap-3">
                 <div className="p-2 bg-purple-100 rounded-lg flex-shrink-0">
-                  <Database className="w-4 h-4 text-purple-600" />
+                  <Database className="w-5 h-5 text-purple-600" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-gray-600">Total Data</p>
-                  <p className="text-xl font-bold text-purple-600 truncate">{totalGB.toFixed(1)}GB</p>
+                  <p className="text-xs text-gray-600 font-medium">Total Data</p>
+                  <p className="text-xl font-bold text-purple-600">{totalGB.toFixed(1)}GB</p>
                 </div>
               </div>
             </div>
@@ -365,12 +396,12 @@ function BundleAllocatorApp({
 
         {/* Results Section */}
         {entries.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200/50 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden transition-all hover:shadow-2xl">
+            <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-600" />
-                  Processed Results
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
+                  <Check className="w-6 h-6 text-green-600" />
+                  <span>Processed Results</span>
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
                   {validEntries.length} valid, {invalidEntries.length} invalid, {duplicateEntries.length} duplicates
@@ -380,9 +411,9 @@ function BundleAllocatorApp({
               <button
                 onClick={exportToExcel}
                 disabled={isExporting}
-                className={`flex items-center gap-2 px-6 py-3 text-white rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1 ${
+                className={`flex items-center gap-2 px-6 py-3 text-white rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl ${
                   isExporting 
-                    ? 'bg-gray-400 cursor-not-allowed' 
+                    ? 'bg-gray-500 cursor-not-allowed' 
                     : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
                 }`}
               >
@@ -393,72 +424,76 @@ function BundleAllocatorApp({
                   </>
                 ) : (
                   <>
-                    <Download className="w-4 h-4" />
-                    Export to Excel
+                    <Download className="w-5 h-5" />
+                    <span className="font-medium">Export to Excel</span>
                   </>
                 )}
               </button>
             </div>
             
             <div className="max-h-96 overflow-y-auto">
-              {entries.map(({ number, allocationGB, isValid, isDuplicate }, idx) => (
-                <div
-                  key={idx}
-                  className={`flex items-center justify-between p-4 border-b border-gray-100 last:border-b-0 transition-all duration-200 hover:bg-gray-50 ${
-                    isDuplicate ? 'bg-yellow-50' : !isValid ? 'bg-red-50' : ''
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    {isDuplicate ? (
-                      <div className="p-1 bg-yellow-100 rounded-full">
-                        <AlertCircle className="w-4 h-4 text-yellow-600" />
+              <div className="grid grid-cols-1 divide-y divide-gray-100">
+                {entries.map(({ number, allocationGB, isValid, isDuplicate }, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center justify-between p-4 transition-all duration-200 hover:bg-gray-50 ${
+                      isDuplicate ? 'bg-yellow-50' : !isValid ? 'bg-red-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      {isDuplicate ? (
+                        <div className="p-2 bg-yellow-100 rounded-full">
+                          <AlertCircle className="w-5 h-5 text-yellow-600" />
+                        </div>
+                      ) : isValid ? (
+                        <div className="p-2 bg-green-100 rounded-full">
+                          <Check className="w-5 h-5 text-green-600" />
+                        </div>
+                      ) : (
+                        <div className="p-2 bg-red-100 rounded-full">
+                          <AlertCircle className="w-5 h-5 text-red-600" />
+                        </div>
+                      )}
+                      <div>
+                        <p className={`font-mono font-medium text-base ${
+                          isDuplicate ? 'text-yellow-700' : isValid ? 'text-gray-900' : 'text-red-700'
+                        }`}>
+                          {number}
+                        </p>
+                        {isDuplicate && (
+                          <p className="text-xs text-yellow-600 font-medium mt-1">Duplicate entry</p>
+                        )}
+                        {!isValid && !isDuplicate && (
+                          <p className="text-xs text-red-600 font-medium mt-1">Invalid format</p>
+                        )}
                       </div>
-                    ) : isValid ? (
-                      <div className="p-1 bg-green-100 rounded-full">
-                        <Check className="w-4 h-4 text-green-600" />
-                      </div>
-                    ) : (
-                      <div className="p-1 bg-red-100 rounded-full">
-                        <AlertCircle className="w-4 h-4 text-red-600" />
-                      </div>
-                    )}
-                    <div>
-                      <p className={`font-mono font-medium ${
+                    </div>
+                    
+                    <div className="text-right">
+                      <p className={`font-bold text-lg ${
                         isDuplicate ? 'text-yellow-700' : isValid ? 'text-gray-900' : 'text-red-700'
                       }`}>
-                        {number}
+                        {allocationGB} GB
                       </p>
-                      {isDuplicate && (
-                        <p className="text-xs text-yellow-600">Duplicate entry</p>
-                      )}
-                      {!isValid && !isDuplicate && (
-                        <p className="text-xs text-red-600">Invalid format</p>
-                      )}
+                      <p className="text-xs text-gray-500 font-medium mt-1">
+                        {(allocationGB * 1024).toFixed(0)} MB
+                      </p>
                     </div>
                   </div>
-                  
-                  <div className="text-right">
-                    <p className={`font-semibold ${
-                      isDuplicate ? 'text-yellow-700' : isValid ? 'text-gray-900' : 'text-red-700'
-                    }`}>
-                      {allocationGB} GB
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {(allocationGB * 1024).toFixed(0)} MB
-                    </p>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         )}
 
         {/* Empty State */}
         {entries.length === 0 && !isProcessing && (
-          <div className="text-center py-12">
-            <Phone className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No data to process</h3>
-            <p className="text-gray-600">
+          <div className="text-center py-12 px-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-gray-200 shadow-inner">
+            <div className="w-20 h-20 mx-auto mb-6 flex items-center justify-center rounded-full bg-blue-100 text-blue-600">
+              <Phone className="w-10 h-10" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-3">Ready to Process Data</h3>
+            <p className="text-gray-600 max-w-md mx-auto">
               Enter phone numbers above or drag & drop a file to get started
             </p>
           </div>
@@ -514,18 +549,20 @@ function BundleCategorizerApp({
   };
 
   const totalEntries = summary.reduce((total, row) => total + row.count, 0);
+  const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#ec4899'];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Input Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-gray-100">
-          <div className="mb-4">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+        <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-200 transition-all hover:shadow-2xl">
+          <div className="mb-6">
+            <label className="block text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
               Data Input
             </label>
             <textarea
-              className="w-full h-48 p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-mono text-sm bg-gray-50 hover:bg-white"
+              className="w-full h-48 p-4 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-mono text-sm bg-white hover:shadow-md"
               placeholder="Paste your data here...&#10;Example:&#10;024XXXXXXXX 20GB&#10;059XXXXXXXX 50GB&#10;0249XXXXXXX 10GB"
               value={rawData}
               onChange={(e) => setRawData(e.target.value)}
@@ -533,14 +570,15 @@ function BundleCategorizerApp({
           </div>
 
           <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-gray-600 font-medium">
               {rawData.split('\n').filter(line => line.trim().length > 0).length} lines detected
             </div>
             <button
               onClick={parseData}
               disabled={!rawData.trim()}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+              className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl font-medium hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
+              <BarChart className="w-5 h-5" />
               Process Data
             </button>
           </div>
@@ -550,25 +588,25 @@ function BundleCategorizerApp({
         {summary.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Summary Table */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-semibold text-gray-800">Summary</h2>
-                <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 transition-all hover:shadow-2xl">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+                <h2 className="text-xl font-bold text-gray-800">Summary</h2>
+                <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-bold">
                   {totalEntries} total entries
                 </div>
               </div>
               
-              <div className="overflow-hidden rounded-lg border border-gray-200">
+              <div className="overflow-hidden rounded-xl border border-gray-200">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                         Data Allocation
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                         Count
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                         Percentage
                       </th>
                     </tr>
@@ -578,24 +616,27 @@ function BundleCategorizerApp({
                       <tr key={idx} className="hover:bg-gray-50 transition-colors duration-150">
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">
                           <div className="flex items-center">
-                            <div className="w-3 h-3 rounded-full bg-blue-500 mr-3"></div>
+                            <div className="w-3 h-3 rounded-full mr-3" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
                             {row.allocation}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
-                          <span className="bg-gray-100 px-2 py-1 rounded-full font-medium">
+                          <span className="bg-gray-100 px-3 py-1 rounded-full font-bold">
                             {row.count}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
                           <div className="flex items-center">
-                            <div className="w-full bg-gray-200 rounded-full h-2 mr-2">
+                            <div className="w-full bg-gray-200 rounded-full h-2.5 mr-3">
                               <div
-                                className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                                style={{ width: `${(row.count / totalEntries * 100)}%` }}
+                                className="h-2.5 rounded-full transition-all duration-500"
+                                style={{ 
+                                  width: `${(row.count / totalEntries * 100)}%`,
+                                  backgroundColor: COLORS[idx % COLORS.length]
+                                }}
                               ></div>
                             </div>
-                            <span className="text-xs font-medium min-w-0">
+                            <span className="text-sm font-bold min-w-0">
                               {((row.count / totalEntries) * 100).toFixed(1)}%
                             </span>
                           </div>
@@ -608,9 +649,9 @@ function BundleCategorizerApp({
             </div>
 
             {/* Chart Section */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-4">Visualization</h2>
-              <div className="bg-gray-50 rounded-lg p-4">
+            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 transition-all hover:shadow-2xl">
+              <h2 className="text-xl font-bold text-gray-800 mb-6">Visualization</h2>
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-gray-200">
                 <ResponsiveContainer width="100%" height={300}>
                   <RechartsBarChart data={chartData}>
                     <XAxis 
@@ -626,19 +667,25 @@ function BundleCategorizerApp({
                     />
                     <Tooltip 
                       contentStyle={{
-                        backgroundColor: '#1f2937',
+                        backgroundColor: '#ADD8E6',
                         border: 'none',
                         borderRadius: '8px',
-                        color: 'white',
-                        fontSize: '14px'
+                        color: 'black',
+                        fontSize: '16px'
                       }}
+                      formatter={(value) => [value, 'Count']}
+                      labelFormatter={(label) => `Allocation: ${label}`}
                     />
                     <Legend />
                     <Bar 
                       dataKey="count" 
-                      fill="#3b82f6"
+                      name="Number of Entries"
                       radius={[4, 4, 0, 0]}
-                    />
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Bar>
                   </RechartsBarChart>
                 </ResponsiveContainer>
               </div>
@@ -648,13 +695,11 @@ function BundleCategorizerApp({
 
         {/* Empty State */}
         {summary.length === 0 && rawData.trim() === "" && (
-          <div className="bg-white rounded-xl shadow-lg p-12 text-center border border-gray-100">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-inner p-12 text-center border border-gray-200">
+            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <BarChart className="w-10 h-10 text-blue-600" />
             </div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">Ready to Process Data</h3>
+            <h3 className="text-xl font-bold text-gray-800 mb-3">Ready to Analyze Data</h3>
             <p className="text-gray-600 max-w-md mx-auto">
               Paste your data in the input field above and click "Process Data" to see allocation summaries and visualizations.
             </p>
@@ -721,35 +766,35 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
       {/* Header with Tabs */}
-      <div className="bg-white/90 backdrop-blur-sm border-b border-gray-200/50 sticky top-0 z-50">
+      <div className="bg-white/90 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between py-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between py-4 gap-3">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg">
                 <Database className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Data Processing Suite</h1>
-                <p className="text-sm text-gray-600">Professional data validation and categorization tools</p>
+                <p className="text-sm text-gray-600">Data validation and categorization tool</p>
               </div>
             </div>
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex space-x-1">
+          <div className="flex flex-wrap gap-1">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-t-lg font-medium transition-all duration-200 ${
+                  className={`flex items-center gap-2 px-5 py-3 rounded-t-lg font-medium transition-all duration-200 ${
                     activeTab === tab.id
                       ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
                       : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-5 h-5" />
                   {tab.name}
                 </button>
               );
