@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
-import { Upload, FileText, Check, X, Download, Phone, Database, AlertCircle } from "lucide-react";
-import * as ExcelJS from 'exceljs';
+import { Upload, FileText, Check, X, Download, Phone, Database, AlertCircle, BarChart } from "lucide-react";
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import ExcelJS from "exceljs";
 
 type PhoneEntry = {
   number: string;
@@ -9,7 +10,12 @@ type PhoneEntry = {
   isDuplicate: boolean;
 };
 
-function App() {
+type AllocationSummary = {
+  [key: string]: number;
+};
+
+// Bundle Allocator App Component
+function BundleAllocatorApp() {
   const [entries, setEntries] = useState<PhoneEntry[]>([]);
   const [inputText, setInputText] = useState<string>("");
   const [isDragActive, setIsDragActive] = useState(false);
@@ -82,7 +88,7 @@ function App() {
       // Alert if duplicates found
       if (duplicates.size > 0) {
         const duplicateList = Array.from(duplicates).join(', ');
-        alert(`⚠️ Duplicate phone numbers detected:\n${duplicateList}\n\nDuplicates will be highlighted in yellow in the Excel export.`);
+        alert(`⚠️ Duplicate phone numbers detected:\n${duplicateList}\n\nDuplicates will be highlighted in the export.`);
       }
 
       setEntries(parsed);
@@ -128,83 +134,71 @@ function App() {
     setIsExporting(true);
 
     try {
+      // Load ExcelJS dynamically
+      //const ExcelJS = await import('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js');
       const workbook = new ExcelJS.Workbook();
-      
-      // Create main worksheet
-      const worksheet = workbook.addWorksheet('Sheet1');
+      const worksheet = workbook.addWorksheet("PhoneData");
       
       // Add headers
-      worksheet.addRow(['Beneficiary Msisdn', 'Beneficiary Name', 'Voice(Minutes)', 'Data (MB) (1024MB = 1GB)', 'Sms(Unit)']);
-      
+      worksheet.addRow([
+        "Beneficiary Msisdn",
+        "Beneficiary Name", 
+        "Voice(Minutes)",
+        "Data (MB) (1024MB = 1GB)",
+        "Sms(Unit)",
+      ]);
 
-      // Include ALL entries (valid, invalid, and duplicates)
-      entries.forEach((entry, index) => {
-        const row = worksheet.addRow([
-          entry.number,                    // Beneficiary Msisdn
-          '',                             // Beneficiary Name (empty as not provided in input)
-          0,                             // Voice(Minutes) (set to zero as not provided in input)
-          entry.allocationGB * 1024, // Data (MB) - convert GB to MB and round
-          0                              // Sms(Unit) (set to zero as not provided in input)
-        ]);
-
-        // Apply row styling
-        row.eachCell((cell) => {
-          cell.border = {
-            top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-            bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-            left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-            right: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+      // Add data rows
+      entries.forEach(({ number, allocationGB, isValid, isDuplicate }) => {
+        const mb = allocationGB * 1024;
+        const row = worksheet.addRow([number, "", 0, mb, 0]);
+        
+        // Style invalid numbers in red
+        if (!isValid) {
+          row.getCell(1).font = { color: { argb: "FFFF0000" }, bold: true };
+        }
+        
+        // Style duplicates in yellow background
+        if (isDuplicate) {
+          row.getCell(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFFF00' }
           };
-        });
-
-        // Highlight invalid entries in red, duplicates in yellow
-        if (!entry.isValid) {
-          row.eachCell((cell) => {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
-            cell.font = { color: { argb: 'FF000000' }, bold: true };
-          });
-        } else if (entry.isDuplicate) {
-          row.eachCell((cell) => {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
-            cell.font = { color: { argb: 'FF000000' }, bold: true };
-          });
         }
       });
 
-      // Set column widths
-      worksheet.columns = [
-        { key: 'msisdn', width: 15 },      // Beneficiary Msisdn
-        { key: 'name', width: 20 },        // Beneficiary Name
-        { key: 'voice', width: 15 },       // Voice(Minutes)
-        { key: 'data', width: 15 },        // Data (MB)
-        { key: 'sms', width: 12 }          // Sms(Unit)
-      ];
+      // Auto-adjust column widths
+      worksheet.columns.forEach((column) => {
+        let maxLength = 10;
+        if (typeof column.eachCell === "function") {
+          column.eachCell({ includeEmpty: true }, (cell) => {
+            const cellValue = cell.value ? cell.value.toString() : "";
+            maxLength = Math.max(maxLength, cellValue.length);
+          });
+        }
+        column.width = maxLength + 2;
+      });
 
-      // Totals placement: 5 rows after last entry
-      const lastRow = worksheet.lastRow?.number || entries.length + 1;
-      const totalRowNumber = lastRow + 5;
-      worksheet.getCell(`F${totalRowNumber}`).value = {
-        formula: `SUM(D2:D${lastRow})`,
-      };
-      worksheet.getCell(`G${totalRowNumber}`).value = {
-        formula: `F${totalRowNumber}/1024`,
-      };
-      worksheet.getCell(`F${totalRowNumber}`).font = { bold: true };
-      worksheet.getCell(`G${totalRowNumber}`).font = { bold: true };
-
-      // Generate Excel file
-      const buffer = await workbook.xlsx.writeBuffer();
+      // Add totals row 5 rows after last entry
+      const lastRowNum = worksheet.lastRow?.number || entries.length + 1;
+      const totalRowNum = lastRowNum + 5;
       
-      // Create download link
-      const blob = new Blob([buffer], { 
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      worksheet.getCell(`F${totalRowNum}`).value = { formula: `SUM(D2:D${lastRowNum})` };
+      worksheet.getCell(`G${totalRowNum}`).value = { formula: `F${totalRowNum}/1024` };
+      worksheet.getCell(`F${totalRowNum}`).font = { bold: true };
+      worksheet.getCell(`G${totalRowNum}`).font = { bold: true };
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
       
+      // Create download link
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
       link.href = url;
-      link.download = `UploadTemplate.xlsx`;
+      link.download = 'UploadTemplate.xlsx';
       link.click();
       
       // Cleanup
@@ -214,9 +208,11 @@ function App() {
       const validEntries = entries.filter(entry => entry.isValid && !entry.isDuplicate);
       const duplicateCount = entries.filter(entry => entry.isDuplicate).length;
       const invalidCount = entries.filter(entry => !entry.isValid).length;
+      const totalMB = entries.reduce((sum, entry) => sum + (entry.allocationGB * 1024), 0);
+      const totalGB = totalMB / 1024;
       
       // Success message
-      alert(`✅ Excel file exported successfully!\n\nTotal exported: ${entries.length} entries\nValid: ${validEntries.length}\nDuplicates (highlighted in yellow): ${duplicateCount}\nInvalid (highlighted in red): ${invalidCount}`);
+      alert(`✅ Excel file exported successfully!\n\nTotal exported: ${entries.length} entries\nValid: ${validEntries.length}\nDuplicates: ${duplicateCount}\nInvalid: ${invalidCount}\n\nTotal Data: ${totalGB.toFixed(2)} GB (${totalMB.toFixed(0)} MB)`);
       
       // Clear data after successful export
       setInputText("");
@@ -237,21 +233,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      {/* Header */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-6 py-4">
-          <div className="flex items-center gap-3">
-            {/* <div className="p-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg">
-              <Phone className="w-6 h-6 text-white" />
-            </div> */}
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">📱 Phone Number Validator/Extractor</h1>
-              <p className="text-sm text-gray-600">Validate phone numbers and prepare data exports</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Input Section */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200/50 overflow-hidden mb-8">
@@ -478,4 +459,258 @@ function App() {
   );
 }
 
-export default App;
+// Bundle Categorizer App Component
+function BundleCategorizerApp() {
+  const [rawData, setRawData] = useState("");
+  const [summary, setSummary] = useState<Array<{allocation: string, count: number}>>([]);
+  const [chartData, setChartData] = useState<Array<{allocation: string, count: number}>>([]);
+
+  const parseData = () => {
+    const lines = rawData.split("\n").map(line => line.trim()).filter(line => line.length > 0);
+
+    // Properly typed object
+    const allocationSummary: AllocationSummary = {};
+
+    lines.forEach(line => {
+      const parts = line.split(/\s+/);
+      let allocation = parts[1] || "";
+      allocation = allocation.replace(/[^0-9]/g, "");
+
+      if (allocation) {
+        allocation = allocation + " GB";
+      } else {
+        allocation = "Unknown";
+      }
+
+      allocationSummary[allocation] = (allocationSummary[allocation] || 0) + 1;
+    });
+
+    const summaryArray = Object.entries(allocationSummary).map(([key, value]) => ({
+      allocation: key,
+      count: value as number,
+    }));
+
+    setSummary(summaryArray);
+    setChartData(summaryArray);
+  };
+
+  const totalEntries = summary.reduce((total, row) => total + row.count, 0);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        {/* Input Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-gray-100">
+          <div className="mb-4">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Data Input
+            </label>
+            <textarea
+              className="w-full h-48 p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-mono text-sm bg-gray-50 hover:bg-white"
+              placeholder="Paste your data here...&#10;Example:&#10;024XXXXXXXX 20GB&#10;059XXXXXXXX 50GB&#10;0249XXXXXXX 10GB"
+              value={rawData}
+              onChange={(e) => setRawData(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              {rawData.split('\n').filter(line => line.trim().length > 0).length} lines detected
+            </div>
+            <button
+              onClick={parseData}
+              disabled={!rawData.trim()}
+              className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+            >
+              Process Data
+            </button>
+          </div>
+        </div>
+
+        {/* Results Section */}
+        {summary.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Summary Table */}
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-semibold text-gray-800">Summary</h2>
+                <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                  {totalEntries} total entries
+                </div>
+              </div>
+              
+              <div className="overflow-hidden rounded-lg border border-gray-200">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Data Allocation
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Count
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Percentage
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {summary.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50 transition-colors duration-150">
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          <div className="flex items-center">
+                            <div className="w-3 h-3 rounded-full bg-blue-500 mr-3"></div>
+                            {row.allocation}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          <span className="bg-gray-100 px-2 py-1 rounded-full font-medium">
+                            {row.count}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          <div className="flex items-center">
+                            <div className="w-full bg-gray-200 rounded-full h-2 mr-2">
+                              <div
+                                className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                                style={{ width: `${(row.count / totalEntries * 100)}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-xs font-medium min-w-0">
+                              {((row.count / totalEntries) * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Chart Section */}
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+              <h2 className="text-2xl font-semibold text-gray-800 mb-4">Visualization</h2>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <ResponsiveContainer width="100%" height={300}>
+                  <RechartsBarChart data={chartData}>
+                    <XAxis 
+                      dataKey="allocation" 
+                      tick={{ fontSize: 12 }}
+                      axisLine={{ stroke: '#e5e7eb' }}
+                      tickLine={{ stroke: '#e5e7eb' }}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 12 }}
+                      axisLine={{ stroke: '#e5e7eb' }}
+                      tickLine={{ stroke: '#e5e7eb' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: '#1f2937',
+                        border: 'none',
+                        borderRadius: '8px',
+                        color: 'white',
+                        fontSize: '14px'
+                      }}
+                    />
+                    <Legend />
+                    <Bar 
+                      dataKey="count" 
+                      fill="#3b82f6"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </RechartsBarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {summary.length === 0 && rawData.trim() === "" && (
+          <div className="bg-white rounded-xl shadow-lg p-12 text-center border border-gray-100">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">Ready to Process Data</h3>
+            <p className="text-gray-600 max-w-md mx-auto">
+              Paste your data in the input field above and click "Process Data" to see allocation summaries and visualizations.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Main App with Tabs
+export default function App() {
+  const [activeTab, setActiveTab] = useState("bundle-allocator");
+
+  const tabs = [
+    {
+      id: "bundle-allocator",
+      name: "Bundle Allocator",
+      icon: Phone,
+      component: BundleAllocatorApp
+    },
+    {
+      id: "bundle-categorizer", 
+      name: "Bundle Categorizer",
+      icon: BarChart,
+      component: BundleCategorizerApp
+    }
+  ];
+
+  const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component || BundleAllocatorApp;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      {/* Header with Tabs */}
+      <div className="bg-white/90 backdrop-blur-sm border-b border-gray-200/50 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg">
+                <Database className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Data Processing Suite</h1>
+                <p className="text-sm text-gray-600">Professional data validation and categorization tools</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="flex space-x-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-t-lg font-medium transition-all duration-200 ${
+                    activeTab === tab.id
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      <div className="tab-content">
+        <ActiveComponent />
+      </div>
+    </div>
+  );
+}
