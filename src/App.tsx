@@ -2,6 +2,8 @@ import React, { useState, useCallback } from "react";
 import { Upload, FileText, Check, X, Download, Phone, Database, AlertCircle, BarChart } from "lucide-react";
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
+
 
 type PhoneEntry = {
   number: string;
@@ -15,9 +17,17 @@ type AllocationSummary = {
 };
 
 // Bundle Allocator App Component
-function BundleAllocatorApp() {
-  const [entries, setEntries] = useState<PhoneEntry[]>([]);
-  const [inputText, setInputText] = useState<string>("");
+function BundleAllocatorApp({ 
+  inputText, 
+  setInputText, 
+  entries, 
+  setEntries 
+}: {
+  inputText: string;
+  setInputText: (text: string) => void;
+  entries: PhoneEntry[];
+  setEntries: (entries: PhoneEntry[]) => void;
+}) {
   const [isDragActive, setIsDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -225,7 +235,6 @@ function BundleAllocatorApp() {
       setIsExporting(false);
     }
   };
-
   const validEntries = entries.filter(entry => entry.isValid && !entry.isDuplicate);
   const invalidEntries = entries.filter(entry => !entry.isValid);
   const duplicateEntries = entries.filter(entry => entry.isDuplicate);
@@ -460,11 +469,21 @@ function BundleAllocatorApp() {
 }
 
 // Bundle Categorizer App Component
-function BundleCategorizerApp() {
-  const [rawData, setRawData] = useState("");
-  const [summary, setSummary] = useState<Array<{allocation: string, count: number}>>([]);
-  const [chartData, setChartData] = useState<Array<{allocation: string, count: number}>>([]);
-
+function BundleCategorizerApp({ 
+  rawData, 
+  setRawData, 
+  summary, 
+  setSummary, 
+  chartData, 
+  setChartData 
+}: {
+  rawData: string;
+  setRawData: (data: string) => void;
+  summary: Array<{allocation: string, count: number}>;
+  setSummary: (summary: Array<{allocation: string, count: number}>) => void;
+  chartData: Array<{allocation: string, count: number}>;
+  setChartData: (data: Array<{allocation: string, count: number}>) => void;
+}) {
   const parseData = () => {
     const lines = rawData.split("\n").map(line => line.trim()).filter(line => line.length > 0);
 
@@ -646,9 +665,18 @@ function BundleCategorizerApp() {
   );
 }
 
-// Main App with Tabs
+// Main App with Tabs and Persistent State
 export default function App() {
   const [activeTab, setActiveTab] = useState("bundle-allocator");
+  
+  // Bundle Allocator state
+  const [allocatorInputText, setAllocatorInputText] = useState("");
+  const [allocatorEntries, setAllocatorEntries] = useState<PhoneEntry[]>([]);
+  
+  // Bundle Categorizer state
+  const [categorizerRawData, setCategorizerRawData] = useState("");
+  const [categorizerSummary, setCategorizerSummary] = useState<Array<{allocation: string, count: number}>>([]);
+  const [categorizerChartData, setCategorizerChartData] = useState<Array<{allocation: string, count: number}>>([]);
 
   const tabs = [
     {
@@ -665,7 +693,30 @@ export default function App() {
     }
   ];
 
-  const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component || BundleAllocatorApp;
+  const renderActiveComponent = () => {
+    if (activeTab === "bundle-allocator") {
+      return (
+        <BundleAllocatorApp
+          inputText={allocatorInputText}
+          setInputText={setAllocatorInputText}
+          entries={allocatorEntries}
+          setEntries={setAllocatorEntries}
+        />
+      );
+    } else if (activeTab === "bundle-categorizer") {
+      return (
+        <BundleCategorizerApp
+          rawData={categorizerRawData}
+          setRawData={setCategorizerRawData}
+          summary={categorizerSummary}
+          setSummary={setCategorizerSummary}
+          chartData={categorizerChartData}
+          setChartData={setCategorizerChartData}
+        />
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
@@ -709,7 +760,7 @@ export default function App() {
 
       {/* Tab Content */}
       <div className="tab-content">
-        <ActiveComponent />
+        {renderActiveComponent()}
       </div>
     </div>
   );
