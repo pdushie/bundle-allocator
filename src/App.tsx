@@ -51,7 +51,7 @@ function BundleAllocatorApp({
       // First pass: collect all phone numbers and identify duplicates
       lines.forEach((line) => {
         const cleanedLine = line.replace(/\./g, " ").trim();
-        const parts = cleanedLine.split(/\s+/);
+        const parts = cleanedLine.split(/[\s-]+/);
 
         if (parts.length >= 2) {
           const phoneRaw = parts[0];
@@ -74,7 +74,7 @@ function BundleAllocatorApp({
       // Second pass: create entries with duplicate flag
       lines.forEach((line) => {
         const cleanedLine = line.replace(/\./g, " ").trim();
-        const parts = cleanedLine.split(/\s+/);
+        const parts = cleanedLine.split(/[\s-]+/);
 
         if (parts.length >= 2) {
           const phoneRaw = parts[0];
@@ -526,7 +526,7 @@ function BundleCategorizerApp({
     const allocationSummary: AllocationSummary = {};
 
     lines.forEach(line => {
-      const parts = line.split(/\s+/);
+      const parts = line.split(/[\s-]+/); // split by spaces, tabs, or hyphens
       let allocation = parts[1] || "";
       allocation = allocation.replace(/[^0-9]/g, "");
 
@@ -775,7 +775,7 @@ export default function App() {
                 <Database className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Data Processing Suite</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Data Processing Suite V1.0</h1>
                 <p className="text-sm text-gray-600">Data validation and categorization tool</p>
               </div>
             </div>
