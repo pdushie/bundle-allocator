@@ -544,8 +544,26 @@ function BundleCategorizerApp({
       count: value as number,
     }));
 
-    setSummary(summaryArray);
-    setChartData(summaryArray);
+    // Sort by data allocation in ascending order
+    const sortedSummaryArray = summaryArray.sort((a, b) => {
+      // Handle "Unknown" allocation - put it at the end
+      if (a.allocation === "Unknown" && b.allocation === "Unknown") return 0;
+      if (a.allocation === "Unknown") return 1;
+      if (b.allocation === "Unknown") return -1;
+      
+      // Extract numeric values for comparison
+      const aValue = parseInt(a.allocation.replace(/[^0-9]/g, "")) || 0;
+      const bValue = parseInt(b.allocation.replace(/[^0-9]/g, "")) || 0;
+
+      // Handle cases where parseInt returns NaN
+      const aNum = isNaN(aValue) ? 0 : aValue;
+      const bNum = isNaN(bValue) ? 0 : bValue;
+      
+      return aNum - bNum;
+    });
+
+    setSummary(sortedSummaryArray);
+    setChartData(sortedSummaryArray);
     setRawData(""); // Clear the input text after processing
   };
 
