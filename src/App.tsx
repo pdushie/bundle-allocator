@@ -67,7 +67,8 @@ function HistoryManager({
   });
 
   const clearHistory = () => {
-    if (confirm("Are you sure you want to clear all history? This action cannot be undone.")) {
+    const shouldClear = window.confirm && window.confirm("Are you sure you want to clear all history? This action cannot be undone.");
+    if (shouldClear) {
       setHistory([]);
       setSelectedDate("");
     }
@@ -75,7 +76,7 @@ function HistoryManager({
 
   const exportHistoryToExcel = async () => {
     if (history.length === 0) {
-      alert("No history data to export");
+      window.alert && window.alert("No history data to export");
       return;
     }
 
@@ -158,10 +159,10 @@ function HistoryManager({
       link.click();
       URL.revokeObjectURL(url);
 
-      alert("✅ History exported successfully!");
+      window.alert && window.alert("✅ History exported successfully!");
     } catch (error) {
       console.error('Export error:', error);
-      alert('❌ Error exporting history. Please try again.');
+      window.alert && window.alert('❌ Error exporting history. Please try again.');
     }
   };
 
@@ -523,10 +524,10 @@ function BundleAllocatorApp({
         }
       });
 
-      // Alert if duplicates found
+      // Show duplicate alert
       if (duplicates.size > 0) {
         const duplicateList = Array.from(duplicates).join(', ');
-        alert(`⚠️ Duplicate phone numbers detected:\n${duplicateList}\n\nDuplicates will be highlighted in the export.`);
+        window.alert && window.alert(`⚠️ Duplicate phone numbers detected:\n${duplicateList}\n\nDuplicates will be highlighted in the export.`);
       }
 
       setEntries(parsed);
@@ -579,7 +580,7 @@ function BundleAllocatorApp({
 
   const exportToExcel = async () => {
     if (entries.length === 0) {
-      alert("No data to export");
+      window.alert && window.alert("No data to export");
       return;
     }
 
@@ -651,9 +652,8 @@ function BundleAllocatorApp({
       const totalMB = entries.reduce((sum, entry) => sum + (entry.allocationGB * 1024), 0);
       const totalGB = totalMB / 1024;
       
-      alert(`✅ Excel file exported successfully!\n\nTotal exported: ${entries.length} entries\nValid: ${validEntries.length}\nDuplicates: ${duplicateCount}\nInvalid: ${invalidCount}\n\nTotal Data: ${totalGB.toFixed(2)} GB (${totalMB.toFixed(0)} MB)`);
+      window.alert && window.alert(`✅ Excel file exported successfully!\n\nTotal exported: ${entries.length} entries\nValid: ${validEntries.length}\nDuplicates: ${duplicateCount}\nInvalid: ${invalidCount}\n\nTotal Data: ${totalGB.toFixed(2)} GB (${totalMB.toFixed(0)} MB)`);
       
-      // Add to history before clearing
       onAddToHistory(entries, 'bundle-allocator');
       
       setInputText("");
@@ -661,7 +661,7 @@ function BundleAllocatorApp({
       
     } catch (error) {
       console.error('Export error:', error);
-      alert('❌ Error exporting to Excel. Please try again.');
+      window.alert && window.alert('❌ Error exporting to Excel. Please try again.');
     } finally {
       setIsExporting(false);
     }
@@ -919,7 +919,7 @@ function BundleAllocatorApp({
   );
 }
 
-// Bundle Categorizer App Component
+// Bundle Categorizer App Component  
 function BundleCategorizerApp({ 
   rawData, 
   setRawData, 
@@ -1261,7 +1261,7 @@ export default function App() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Data Processing Suite V1.0</h1>
-                <p className="text-sm text-gray-600">Data validation and categorization tool</p>
+                <p className="text-sm text-gray-600">Data validation and categorization tool with history tracking</p>
               </div>
             </div>
             
