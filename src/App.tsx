@@ -1261,7 +1261,7 @@ export default function App() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Data Processing Suite V1.0</h1>
-                <p className="text-sm text-gray-600">Data validation and categorization tool with history tracking</p>
+                <p className="text-sm text-gray-600">Data validation and categorization tool</p>
               </div>
             </div>
             
