@@ -1,8 +1,7 @@
-import React, { useState, useCallback, useRef } from "react";
-import { Upload, FileText, Check, X, Download, Phone, Database, AlertCircle, BarChart } from "lucide-react";
-import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { Upload, FileText, Check, X, Download, Phone, Database, AlertCircle, BarChart, History, Calendar, Eye, Trash2 } from "lucide-react";
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell, LineChart, Line } from "recharts";
 import ExcelJS from "exceljs";
-import { SpeedInsights } from "@vercel/speed-insights/react"
 
 type PhoneEntry = {
   number: string;
@@ -15,22 +14,451 @@ type AllocationSummary = {
   [key: string]: number;
 };
 
+type HistoryEntry = {
+  id: string;
+  date: string;
+  timestamp: number;
+  entries: PhoneEntry[];
+  totalGB: number;
+  validCount: number;
+  invalidCount: number;
+  duplicateCount: number;
+  type: 'bundle-allocator' | 'bundle-categorizer';
+};
+
+// History Manager Component
+function HistoryManager({ 
+  history, 
+  setHistory 
+}: {
+  history: HistoryEntry[];
+  setHistory: (history: HistoryEntry[]) => void;
+}) {
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [viewMode, setViewMode] = useState<'summary' | 'detailed'>('summary');
+
+  // Get unique dates from history
+  const availableDates = Array.from(new Set(history.map(entry => entry.date))).sort((a, b) => b.localeCompare(a));
+
+  // Filter history by selected date
+  const filteredHistory = selectedDate 
+    ? history.filter(entry => entry.date === selectedDate)
+    : history;
+
+  // Calculate daily summaries
+  const dailySummaries = availableDates.map(date => {
+    const dayEntries = history.filter(entry => entry.date === date);
+    const totalEntries = dayEntries.reduce((sum, entry) => sum + entry.entries.length, 0);
+    const totalGB = dayEntries.reduce((sum, entry) => sum + entry.totalGB, 0);
+    const totalValid = dayEntries.reduce((sum, entry) => sum + entry.validCount, 0);
+    const totalInvalid = dayEntries.reduce((sum, entry) => sum + entry.invalidCount, 0);
+    const totalDuplicates = dayEntries.reduce((sum, entry) => sum + entry.duplicateCount, 0);
+    const sessionsCount = dayEntries.length;
+
+    return {
+      date,
+      totalEntries,
+      totalGB,
+      totalValid,
+      totalInvalid,
+      totalDuplicates,
+      sessionsCount
+    };
+  });
+
+  const clearHistory = () => {
+    if (confirm("Are you sure you want to clear all history? This action cannot be undone.")) {
+      setHistory([]);
+      setSelectedDate("");
+    }
+  };
+
+  const exportHistoryToExcel = async () => {
+    if (history.length === 0) {
+      alert("No history data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      
+      // Daily Summary Sheet
+      const summarySheet = workbook.addWorksheet("Daily Summary");
+      summarySheet.addRow([
+        "Date",
+        "Sessions",
+        "Total Entries",
+        "Valid Numbers",
+        "Invalid Numbers", 
+        "Duplicates",
+        "Total Data (GB)"
+      ]);
+
+      dailySummaries.forEach(summary => {
+        summarySheet.addRow([
+          summary.date,
+          summary.sessionsCount,
+          summary.totalEntries,
+          summary.totalValid,
+          summary.totalInvalid,
+          summary.totalDuplicates,
+          summary.totalGB.toFixed(2)
+        ]);
+      });
+
+      // Detailed History Sheet
+      const detailSheet = workbook.addWorksheet("Detailed History");
+      detailSheet.addRow([
+        "Date",
+        "Time",
+        "Type",
+        "Phone Number",
+        "Allocation (GB)",
+        "Status"
+      ]);
+
+      history.forEach(entry => {
+        entry.entries.forEach(phoneEntry => {
+          const status = phoneEntry.isDuplicate ? "Duplicate" : 
+                        phoneEntry.isValid ? "Valid" : "Invalid";
+          detailSheet.addRow([
+            entry.date,
+            new Date(entry.timestamp).toLocaleTimeString(),
+            entry.type,
+            phoneEntry.number,
+            phoneEntry.allocationGB,
+            status
+          ]);
+        });
+      });
+
+      // Auto-adjust column widths
+      [summarySheet, detailSheet].forEach(sheet => {
+        sheet.columns.forEach(column => {
+          let maxLength = 10;
+          if (typeof column.eachCell === "function") {
+            column.eachCell({ includeEmpty: true }, (cell) => {
+              const cellValue = cell.value ? cell.value.toString() : "";
+              maxLength = Math.max(maxLength, cellValue.length);
+            });
+          }
+          column.width = maxLength + 2;
+        });
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `History_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      alert("✅ History exported successfully!");
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('❌ Error exporting history. Please try again.');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Controls */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 mb-8">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3 mb-2">
+                <History className="w-6 h-6 text-blue-600" />
+                History & Analytics
+              </h2>
+              <p className="text-sm text-gray-600">
+                Track and analyze your daily data processing activities
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Dates</option>
+                {availableDates.map(date => (
+                  <option key={date} value={date}>{date}</option>
+                ))}
+              </select>
+              
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('summary')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    viewMode === 'summary' 
+                      ? 'bg-white text-blue-600 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Summary
+                </button>
+                <button
+                  onClick={() => setViewMode('detailed')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    viewMode === 'detailed' 
+                      ? 'bg-white text-blue-600 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Detailed
+                </button>
+              </div>
+
+              <button
+                onClick={exportHistoryToExcel}
+                disabled={history.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
+
+              <button
+                onClick={clearHistory}
+                disabled={history.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Trash2 className="w-4 h-4" />
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {history.length === 0 ? (
+          <div className="text-center py-12 px-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-gray-200 shadow-inner">
+            <div className="w-20 h-20 mx-auto mb-6 flex items-center justify-center rounded-full bg-blue-100 text-blue-600">
+              <History className="w-10 h-10" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-3">No History Yet</h3>
+            <p className="text-gray-600 max-w-md mx-auto">
+              Process some data using the Bundle Allocator or Categorizer to start building your history
+            </p>
+          </div>
+        ) : viewMode === 'summary' ? (
+          /* Summary View */
+          <div className="space-y-8">
+            {/* Summary Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Calendar className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 font-medium">Total Days</p>
+                    <p className="text-xl font-bold text-gray-900">{availableDates.length}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <Database className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 font-medium">Total Entries</p>
+                    <p className="text-xl font-bold text-gray-900">
+                      {dailySummaries.reduce((sum, day) => sum + day.totalEntries, 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Database className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 font-medium">Total Data</p>
+                    <p className="text-xl font-bold text-gray-900">
+                      {dailySummaries.reduce((sum, day) => sum + day.totalGB, 0).toFixed(1)}GB
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <BarChart className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 font-medium">Sessions</p>
+                    <p className="text-xl font-bold text-gray-900">{history.length}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Daily Summary Chart */}
+            {dailySummaries.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Daily Data Processing Trends</h3>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={dailySummaries.slice(-30)}>
+                      <XAxis 
+                        dataKey="date" 
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(value) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip 
+                        labelFormatter={(value) => `Date: ${value}`}
+                        formatter={(value, name) => [
+                          name === 'totalGB' ? `${value} GB` : value,
+                          name === 'totalGB' ? 'Total Data' : 'Total Entries'
+                        ]}
+                      />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="totalEntries" 
+                        stroke="#3b82f6" 
+                        strokeWidth={3}
+                        name="Total Entries"
+                        dot={{ r: 4 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="totalGB" 
+                        stroke="#10b981" 
+                        strokeWidth={3}
+                        name="Total Data (GB)"
+                        dot={{ r: 4 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Daily Summary Table */}
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+                <h3 className="text-lg font-bold text-gray-900">Daily Summary</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Sessions</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Entries</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Valid</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Invalid</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Duplicates</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Total Data</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {(selectedDate 
+                      ? dailySummaries.filter(s => s.date === selectedDate)
+                      : dailySummaries
+                    ).map((summary) => (
+                      <tr key={summary.date} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{summary.date}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{summary.sessionsCount}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{summary.totalEntries}</td>
+                        <td className="px-4 py-3 text-sm text-green-600 font-medium">{summary.totalValid}</td>
+                        <td className="px-4 py-3 text-sm text-red-600 font-medium">{summary.totalInvalid}</td>
+                        <td className="px-4 py-3 text-sm text-yellow-600 font-medium">{summary.totalDuplicates}</td>
+                        <td className="px-4 py-3 text-sm font-bold text-purple-600">{summary.totalGB.toFixed(2)} GB</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Detailed View */
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <h3 className="text-lg font-bold text-gray-900">Detailed History</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                {filteredHistory.length} sessions {selectedDate && `on ${selectedDate}`}
+              </p>
+            </div>
+            <div className="max-h-96 overflow-y-auto">
+              {filteredHistory.map((entry) => (
+                <div key={entry.id} className="border-b border-gray-100 p-4 hover:bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        {entry.type === 'bundle-allocator' ? 
+                          <Phone className="w-4 h-4 text-blue-600" /> : 
+                          <BarChart className="w-4 h-4 text-blue-600" />
+                        }
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {entry.type === 'bundle-allocator' ? 'Bundle Allocator' : 'Bundle Categorizer'}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {entry.date} at {new Date(entry.timestamp).toLocaleTimeString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-gray-900">{entry.totalGB.toFixed(2)} GB</p>
+                      <p className="text-xs text-gray-600">{entry.entries.length} entries</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div className="bg-green-50 p-2 rounded">
+                      <span className="text-green-600 font-medium">Valid: {entry.validCount}</span>
+                    </div>
+                    <div className="bg-red-50 p-2 rounded">
+                      <span className="text-red-600 font-medium">Invalid: {entry.invalidCount}</span>
+                    </div>
+                    <div className="bg-yellow-50 p-2 rounded">
+                      <span className="text-yellow-600 font-medium">Duplicates: {entry.duplicateCount}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Bundle Allocator App Component
 function BundleAllocatorApp({ 
   inputText, 
   setInputText, 
   entries, 
-  setEntries 
+  setEntries,
+  onAddToHistory 
 }: {
   inputText: string;
   setInputText: (text: string) => void;
   entries: PhoneEntry[];
   setEntries: (entries: PhoneEntry[]) => void;
+  onAddToHistory: (entries: PhoneEntry[], type: 'bundle-allocator' | 'bundle-categorizer') => void;
 }) {
   const [isDragActive, setIsDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null); // File input reference
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validateNumber = (num: string): boolean => /^0\d{9}$/.test(num);
 
@@ -135,19 +563,16 @@ function BundleAllocatorApp({
     onDrop(files);
   };
 
-  // Handle click on drop zone to trigger file input
   const handleDropZoneClick = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
   };
 
-  // Handle file selection via input
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
       onDrop(files);
-      // Reset input value to allow selecting same file again
       e.target.value = '';
     }
   };
@@ -164,7 +589,6 @@ function BundleAllocatorApp({
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("PhoneData");
       
-      // Add headers
       worksheet.addRow([
         "Beneficiary Msisdn",
         "Beneficiary Name", 
@@ -173,17 +597,14 @@ function BundleAllocatorApp({
         "Sms(Unit)",
       ]);
 
-      // Add data rows
       entries.forEach(({ number, allocationGB, isValid, isDuplicate }) => {
         const mb = allocationGB * 1024;
         const row = worksheet.addRow([number, "", 0, mb, 0]);
         
-        // Style invalid numbers in red
         if (!isValid) {
           row.getCell(1).font = { color: { argb: "FFFF0000" }, bold: true };
         }
         
-        // Style duplicates in yellow background
         if (isDuplicate) {
           row.getCell(1).fill = {
             type: 'pattern',
@@ -193,7 +614,6 @@ function BundleAllocatorApp({
         }
       });
 
-      // Auto-adjust column widths
       worksheet.columns.forEach((column) => {
         let maxLength = 10;
         if (typeof column.eachCell === "function") {
@@ -205,7 +625,6 @@ function BundleAllocatorApp({
         column.width = maxLength + 2;
       });
 
-      // Add totals row 5 rows after last entry
       const lastRowNum = worksheet.lastRow?.number || entries.length + 1;
       const totalRowNum = lastRowNum + 5;
       
@@ -219,27 +638,24 @@ function BundleAllocatorApp({
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
       
-      // Create download link
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = 'UploadTemplate.xlsx';
       link.click();
-      
-      // Cleanup
       URL.revokeObjectURL(url);
       
-      // Calculate counts for success message
       const validEntries = entries.filter(entry => entry.isValid && !entry.isDuplicate);
       const duplicateCount = entries.filter(entry => entry.isDuplicate).length;
       const invalidCount = entries.filter(entry => !entry.isValid).length;
       const totalMB = entries.reduce((sum, entry) => sum + (entry.allocationGB * 1024), 0);
       const totalGB = totalMB / 1024;
       
-      // Success message
       alert(`✅ Excel file exported successfully!\n\nTotal exported: ${entries.length} entries\nValid: ${validEntries.length}\nDuplicates: ${duplicateCount}\nInvalid: ${invalidCount}\n\nTotal Data: ${totalGB.toFixed(2)} GB (${totalMB.toFixed(0)} MB)`);
       
-      // Clear data after successful export
+      // Add to history before clearing
+      onAddToHistory(entries, 'bundle-allocator');
+      
       setInputText("");
       setEntries([]);
       
@@ -292,7 +708,7 @@ function BundleAllocatorApp({
 
             {/* File Drop Zone */}
             <div
-              onClick={handleDropZoneClick} // Add click handler
+              onClick={handleDropZoneClick}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -510,7 +926,8 @@ function BundleCategorizerApp({
   summary, 
   setSummary, 
   chartData, 
-  setChartData 
+  setChartData,
+  onAddToHistory 
 }: {
   rawData: string;
   setRawData: (data: string) => void;
@@ -518,25 +935,39 @@ function BundleCategorizerApp({
   setSummary: (summary: Array<{allocation: string, count: number}>) => void;
   chartData: Array<{allocation: string, count: number}>;
   setChartData: (data: Array<{allocation: string, count: number}>) => void;
+  onAddToHistory: (entries: PhoneEntry[], type: 'bundle-allocator' | 'bundle-categorizer') => void;
 }) {
   const parseData = () => {
     const lines = rawData.split("\n").map(line => line.trim()).filter(line => line.length > 0);
-
-    // Properly typed object
     const allocationSummary: AllocationSummary = {};
+    const processedEntries: PhoneEntry[] = [];
 
     lines.forEach(line => {
-      const parts = line.split(/[\s-]+/); // split by spaces, tabs, or hyphens
+      const parts = line.split(/[\s-]+/);
+      const phoneNumber = parts[0] || "";
       let allocation = parts[1] || "";
       allocation = allocation.replace(/[^0-9]/g, "");
 
+      let allocationGB = 0;
+      let allocKey = "";
+
       if (allocation) {
-        allocation = allocation + " GB";
+        allocKey = allocation + " GB";
+        allocationGB = parseInt(allocation) || 0;
       } else {
-        allocation = "Unknown";
+        allocKey = "Unknown";
+        allocationGB = 0;
       }
 
-      allocationSummary[allocation] = (allocationSummary[allocation] || 0) + 1;
+      allocationSummary[allocKey] = (allocationSummary[allocKey] || 0) + 1;
+
+      // Create phone entry for history
+      processedEntries.push({
+        number: phoneNumber,
+        allocationGB: allocationGB,
+        isValid: /^0\d{9}$/.test(phoneNumber),
+        isDuplicate: false
+      });
     });
 
     const summaryArray = Object.entries(allocationSummary).map(([key, value]) => ({
@@ -544,18 +975,14 @@ function BundleCategorizerApp({
       count: value as number,
     }));
 
-    // Sort by data allocation in ascending order
     const sortedSummaryArray = summaryArray.sort((a, b) => {
-      // Handle "Unknown" allocation - put it at the end
       if (a.allocation === "Unknown" && b.allocation === "Unknown") return 0;
       if (a.allocation === "Unknown") return 1;
       if (b.allocation === "Unknown") return -1;
       
-      // Extract numeric values for comparison
       const aValue = parseInt(a.allocation.replace(/[^0-9]/g, "")) || 0;
       const bValue = parseInt(b.allocation.replace(/[^0-9]/g, "")) || 0;
 
-      // Handle cases where parseInt returns NaN
       const aNum = isNaN(aValue) ? 0 : aValue;
       const bNum = isNaN(bValue) ? 0 : bValue;
       
@@ -564,7 +991,11 @@ function BundleCategorizerApp({
 
     setSummary(sortedSummaryArray);
     setChartData(sortedSummaryArray);
-    setRawData(""); // Clear the input text after processing
+    
+    // Add to history
+    onAddToHistory(processedEntries, 'bundle-categorizer');
+    
+    setRawData("");
   };
 
   const totalEntries = summary.reduce((total, row) => total + row.count, 0);
@@ -729,7 +1160,7 @@ function BundleCategorizerApp({
   );
 }
 
-// Main App with Tabs and Persistent State
+// Main App with Tabs, Persistent State, and History
 export default function App() {
   const [activeTab, setActiveTab] = useState("bundle-allocator");
   
@@ -741,6 +1172,27 @@ export default function App() {
   const [categorizerRawData, setCategorizerRawData] = useState("");
   const [categorizerSummary, setCategorizerSummary] = useState<Array<{allocation: string, count: number}>>([]);
   const [categorizerChartData, setCategorizerChartData] = useState<Array<{allocation: string, count: number}>>([]);
+
+  // History state
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+
+  // Add to history function
+  const addToHistory = (entries: PhoneEntry[], type: 'bundle-allocator' | 'bundle-categorizer') => {
+    const now = new Date();
+    const newEntry: HistoryEntry = {
+      id: `${type}-${now.getTime()}`,
+      date: now.toISOString().split('T')[0],
+      timestamp: now.getTime(),
+      entries: entries,
+      totalGB: entries.reduce((sum, entry) => sum + entry.allocationGB, 0),
+      validCount: entries.filter(entry => entry.isValid && !entry.isDuplicate).length,
+      invalidCount: entries.filter(entry => !entry.isValid).length,
+      duplicateCount: entries.filter(entry => entry.isDuplicate).length,
+      type: type
+    };
+
+    setHistory(prev => [newEntry, ...prev]);
+  };
 
   const tabs = [
     {
@@ -754,6 +1206,12 @@ export default function App() {
       name: "Bundle Categorizer",
       icon: BarChart,
       component: BundleCategorizerApp
+    },
+    {
+      id: "history",
+      name: "History & Analytics",
+      icon: History,
+      component: HistoryManager
     }
   ];
 
@@ -765,6 +1223,7 @@ export default function App() {
           setInputText={setAllocatorInputText}
           entries={allocatorEntries}
           setEntries={setAllocatorEntries}
+          onAddToHistory={addToHistory}
         />
       );
     } else if (activeTab === "bundle-categorizer") {
@@ -776,6 +1235,14 @@ export default function App() {
           setSummary={setCategorizerSummary}
           chartData={categorizerChartData}
           setChartData={setCategorizerChartData}
+          onAddToHistory={addToHistory}
+        />
+      );
+    } else if (activeTab === "history") {
+      return (
+        <HistoryManager
+          history={history}
+          setHistory={setHistory}
         />
       );
     }
@@ -794,9 +1261,21 @@ export default function App() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Data Processing Suite V1.0</h1>
-                <p className="text-sm text-gray-600">Data validation and categorization tool</p>
+                <p className="text-sm text-gray-600">Data validation and categorization tool with history tracking</p>
               </div>
             </div>
+            
+            {/* History Quick Stats */}
+            {history.length > 0 && activeTab !== "history" && (
+              <div className="flex items-center gap-4 text-sm">
+                <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">
+                  {history.length} sessions
+                </div>
+                <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
+                  {history.reduce((sum, entry) => sum + entry.totalGB, 0).toFixed(1)} GB total
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Tab Navigation */}
@@ -815,6 +1294,11 @@ export default function App() {
                 >
                   <Icon className="w-5 h-5" />
                   {tab.name}
+                  {tab.id === "history" && history.length > 0 && (
+                    <span className="bg-white/20 text-xs px-2 py-1 rounded-full">
+                      {history.length}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -828,6 +1312,4 @@ export default function App() {
       </div>
     </div>
   );
-
-  return <SpeedInsights />
 }
